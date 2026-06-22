@@ -1,6 +1,7 @@
 (function() {
   'use strict';
 
+  // Використовуємо UA пули та дзеркала для UAKINO / UASerials
   var Defined = {
     api: 'lampac',
     localhost: 'http://wtch.ch/',
@@ -66,7 +67,6 @@
 
   window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection) {
     window.rch_nws[hostkey].typeInvoke('http://wtch.ch', function() {
-
       client.invoke("RchRegistry", {
         host: location.host,
         rchtype: Lampa.Platform.is('android') ? 'apk' : Lampa.Platform.is('tizen') ? 'cors' : (window.rch_nws[hostkey].type || 'web'),
@@ -74,22 +74,11 @@
         player: Lampa.Storage.field('player')
       });
 
-      if (window.rch_nws[hostkey].rchRegistry)
-        return;
-
+      if (window.rch_nws[hostkey].rchRegistry) return;
       window.rch_nws[hostkey].rchRegistry = true;
-
-      var handled = false;
-      client.on('RchRegistry', function (clientIp, connectionId, rchtype) {
-        if (startConnection && !handled) {
-          handled = true;
-          startConnection();
-        }
-      });
 
       client.on("RchClient", function(rchId, url, data, headers, returnHeaders) {
         var network = new Lampa.Reguest();
-        
         function sendResult(uri, html) {
           $.ajax({
             url: 'http://wtch.ch/rch/' + uri + '?id=' + rchId,
@@ -99,186 +88,47 @@
             cache: false,
             contentType: false,
             processData: false,
-            success: function(j) {},
-            error: function() {
-              client.invoke("RchResult", rchId, '');
-            }
+            error: function() { client.invoke("RchResult", rchId, ''); }
           });
         }
 
         function result(html) {
-          if (Lampa.Arrays.isObject(html) || Lampa.Arrays.isArray(html)) {
-            html = JSON.stringify(html);
-          }
-
-          if (typeof CompressionStream !== 'undefined' && html && html.length > 1000) {
-            var compressionStream = new CompressionStream('gzip');
-            var encoder = new TextEncoder();
-            var readable = new ReadableStream({
-              start: function(controller) {
-                controller.enqueue(encoder.encode(html));
-                controller.close();
-              }
-            });
-            var compressedStream = readable.pipeThrough(compressionStream);
-            new Response(compressedStream).arrayBuffer()
-              .then(function(compressedBuffer) {
-                var compressedArray = new Uint8Array(compressedBuffer);
-                if (compressedArray.length > html.length) {
-                  sendResult('result', html);
-                } else {
-                  sendResult('gzresult', compressedArray);
-                }
-              })
-              .catch(function() {
-                sendResult('result', html);
-              });
-
-          } else {
-            sendResult('result', html);
-          }
+          if (Lampa.Arrays.isObject(html) || Lampa.Arrays.isArray(html)) html = JSON.stringify(html);
+          sendResult('result', html);
         }
 
-        if (url == 'eval') {
-          console.log('RCH', url, data);
-          result(eval(data));
-        } else if (url == 'evalrun') {
-          console.log('RCH', url, data);
-          eval(data);
-        } else if (url == 'ping') {
-          result('pong');
-        } else {
-          console.log('RCH', url);
-          network["native"](url, result, function(e) {
-            console.log('RCH', 'result empty, ' + e.status);
-            result('');
-          }, data, {
+        if (url == 'ping') result('pong');
+        else {
+          network["native"](url, result, function() { result(''); }, data, {
             dataType: 'text',
-            timeout: 1000 * 8,
+            timeout: 8000,
             headers: headers,
             returnHeaders: returnHeaders
           });
         }
       });
-
-      client.on('Connected', function(connectionId) {
-        console.log('RCH', 'ConnectionId: ' + connectionId);
-        window.rch_nws[hostkey].connectionId = connectionId;
-      });
-      client.on('Closed', function() {
-        console.log('RCH', 'Connection closed');
-      });
-      client.on('Error', function(err) {
-        console.log('RCH', 'error:', err);
-      });
     });
   };
 
-  window.rch_nws[hostkey].typeInvoke('http://wtch.ch', function() {});
-
-  function rchInvoke(json, call) {
-    if (!window.nwsClient) 
-      window.nwsClient = {};
-
-    var client = window.nwsClient[hostkey];
-    if (client && client.connectionId != null) {
-      call();
-    }
-    else if (client) {
-      console.log('RCH', 'Reconnecting...');
-      client.reconnect(function() {
-        call();
-      });
-    }
-    else {
-      window.nwsClient[hostkey] = new NativeWsClient(json.nws, {
-        autoReconnect: true
-      });
-
-      window.nwsClient[hostkey].on('Connected', function(connectionId) {
-        window.rch_nws[hostkey].Registry(window.nwsClient[hostkey], function() {
-          call();
-        });
-      });
-
-      window.nwsClient[hostkey].connect();
-    }
-  }
-
-  function rchRun(json, call) {
-    if (typeof NativeWsClient == 'undefined') {
-      Lampa.Utils.putScript(["http://wtch.ch/js/nws-client-es5.js?v21042026"], function() {}, false, function() {
-        rchInvoke(json, call);
-      }, true);
-    } else {
-      rchInvoke(json, call);
-    }
-  }
-
   function account(url) {
-    url = url + '';
-    if (url.indexOf('account_email=') == -1) {
-      var email = Lampa.Storage.get('account_email');
-      if (email) url = Lampa.Utils.addUrlComponent(url, 'account_email=' + encodeURIComponent(email));
-    }
     if (url.indexOf('uid=') == -1) {
       var uid = Lampa.Storage.get('lampac_unic_id', '');
       if (uid) url = Lampa.Utils.addUrlComponent(url, 'uid=' + encodeURIComponent(uid));
     }
-    if (url.indexOf('token=') == -1) {
-      var token = '';
-      if (token != '') url = Lampa.Utils.addUrlComponent(url, 'token=');
-    }
-    if (url.indexOf('nws_id=') == -1) {
-      var nws_id = Lampa.Storage.get('lampac_nws_id', '');
-      if (nws_id) url = Lampa.Utils.addUrlComponent(url, 'nws_id=' + encodeURIComponent(nws_id));
-    }
     return url;
   }
 
-  function addHeaders() {
-    var kit_aesgcmkey = Lampa.Storage.get('kit_aesgcmkey', '');
-    if (kit_aesgcmkey) return { 'X-Kit-AesGcm': Lampa.Storage.get('kit_aesgcmkey', '') };
-    return {};
-  }
-
-  var Network = Lampa.Reguest;
-
   function component(object) {
-    var network = new Network();
+    var network = new Lampa.Reguest();
     var scroll = new Lampa.Scroll({ mask: true, over: true });
     var files = new Lampa.Explorer(object);
     var filter = new Lampa.Filter(object);
     var sources = {};
-    var balanser;
     var source;
-    var filter_sources = {};
-    var filter_find = { season: [], voice: [] };
-	
-    if (balansers_with_search == undefined) {
-      network.timeout(10000);
-      network.silent(account('http://wtch.ch/lite/withsearch'), function(json) {
-        balansers_with_search = json;
-      }, function() {
-        balansers_with_search = [];
-      });
-    }
-	
-    function balanserName(j) {
-      var bals = j.balanser;
-      var name = j.name.split(' ')[0];
-      return (bals || name).toLowerCase();
-    }
-	
+
     this.initialize = function() {
       var _this = this;
       this.loading(true);
-      
-      filter.onSearch = function(value) {
-        Lampa.Activity.replace({ search: value, clarification: true, similar: true });
-      };
-      
-      filter.onBack = function() { _this.start(); };
       
       scroll.body().addClass('torrent-list');
       files.appendFiles(scroll.render());
@@ -293,22 +143,25 @@
       });
     };
 
+    // Форсуємо підключення модулів UAкіно та UAсеріали через парсер
     this.createSource = function() {
       var _this = this;
       return new Promise(function(resolve, reject) {
         var url = _this.requestParams(Defined.localhost + 'lite/events?life=true');
         network.silent(account(url), function(json) {
-          if (json && json.online) {
-            json.online.forEach(function(j) {
-              var name = balanserName(j);
-              sources[name] = { url: j.url, name: j.name };
-            });
-            filter_sources = Lampa.Arrays.getKeys(sources);
-            balanser = filter_sources[0];
-            source = sources[balanser].url;
-            resolve();
-          } else reject();
-        }, reject);
+          // Задаємо пріоритет суто на українські балансери
+          sources['uakino'] = { url: Defined.localhost + 'lite/uakino', name: 'UAKINO' };
+          sources['uaserials'] = { url: Defined.localhost + 'lite/uaserials', name: 'UASerials' };
+          
+          source = sources['uakino'].url; // Старт з UAкіно за замовчуванням
+          resolve();
+        }, function() {
+          // Якщо сервер недоступний, все одно створюємо локальні лінки
+          sources['uakino'] = { url: Defined.localhost + 'lite/uakino', name: 'UAKINO' };
+          sources['uaserials'] = { url: Defined.localhost + 'lite/uaserials', name: 'UASerials' };
+          source = sources['uakino'].url;
+          resolve();
+        });
       });
     };
 
@@ -343,13 +196,20 @@
             Lampa.Player.play({ title: item.title, url: item.url });
           }
         });
-      } else this.empty();
+      } else {
+        // Якщо на uakino порожньо, автоматично перемикаємо на uaserials
+        if (source.indexOf('uakino') >= 0) {
+          source = sources['uaserials'].url;
+          this.find();
+        } else this.empty();
+      }
     };
 
     this.render = function() { return scroll.render(); };
     this.destroy = function() { network.clear(); scroll.destroy(); files.destroy(); };
   }
 
+  // Реєстрація плагіна як окремого онлайн-модуля для UAKINO / UASerials
   if (window.lampa_plugin_uaseries) return;
   window.lampa_plugin_uaseries = true;
 
@@ -361,12 +221,12 @@
         if (Lampa.Extensions && Lampa.Extensions.add) {
           Lampa.Extensions.add({
             id: 'uaseries_plugin',
-            name: 'UA Студії (wtch.ch)',
+            name: 'UAKINO / UASerials',
             type: 'online',
-            icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>',
+            icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ffeb3b" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>',
             onSet: function(object) {
               Lampa.Activity.push({
-                title: 'UA Студії',
+                title: 'UAKINO / UASerials',
                 component: 'uaseries_plugin',
                 movie: object.movie,
                 page: 1
