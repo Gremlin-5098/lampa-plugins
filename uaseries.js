@@ -350,7 +350,6 @@
     this.destroy = function() { network.clear(); scroll.destroy(); files.destroy(); };
   }
 
-  // --- ФІНАЛЬНА РЕЄСТРАЦІЯ ПЛАГІНА В СИСТЕМІ LAMPA ---
   if (window.lampa_plugin_uaseries) return;
   window.lampa_plugin_uaseries = true;
 
@@ -358,23 +357,23 @@
     Lampa.Component.add('uaseries_plugin', component);
 
     Lampa.Listener.follow('extension', function(e) {
-      if (e.name == 'uaseries_plugin') {
-        // Додаємо кастомну кнопку "UA Студії" в картку фільму
-        Lampa.Plugins.add({
-          id: 'uaseries_plugin',
-          name: 'UA Студії (wtch.ch)',
-          type: 'online',
-          description: 'Пошук української озвучки через дзеркало wtch.ch',
-          icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>',
-          onSet: function(object) {
-            Lampa.Activity.push({
-              title: 'UA Студії',
-              component: 'uaseries_plugin',
-              movie: object.movie,
-              page: 1
-            });
-          }
-        });
+      if (e.name == 'init') {
+        if (Lampa.Extensions && Lampa.Extensions.add) {
+          Lampa.Extensions.add({
+            id: 'uaseries_plugin',
+            name: 'UA Студії (wtch.ch)',
+            type: 'online',
+            icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>',
+            onSet: function(object) {
+              Lampa.Activity.push({
+                title: 'UA Студії',
+                component: 'uaseries_plugin',
+                movie: object.movie,
+                page: 1
+              });
+            }
+          });
+        }
       }
     });
   }
